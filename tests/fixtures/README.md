@@ -2,6 +2,35 @@
 
 This directory contains example files for testing the plugin.
 
+## Running Tests
+
+From the project root directory:
+
+```bash
+# Install development dependencies
+pip install -e ".[dev]"
+
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=hump_yard_naming_exif --cov-report=html
+
+# Run specific test file
+pytest tests/test_parser.py
+
+# Run specific test
+pytest tests/test_parser.py::TestFilenameParser::test_parse_exact_date_with_time
+```
+
+## Test Structure
+
+- `test_parser.py` - Tests for filename parsing (11 tests)
+- `test_validator.py` - Tests for filename validation (15 tests)
+- `test_plugin.py` - Tests for plugin functionality (20 tests)
+
+**Total: 46 unit tests**
+
 ## Valid Filenames
 
 - `1950.06.15.12.00.00.E.FAM.POR.000001.tiff` - Exact date with full time
