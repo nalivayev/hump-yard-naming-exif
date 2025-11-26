@@ -4,7 +4,7 @@ import logging
 import shutil
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import exiftool
 
@@ -25,7 +25,6 @@ class PhotoNamingExifPlugin(FileProcessorPlugin):
         self.logger = logging.getLogger(__name__)
         self.parser = FilenameParser()
         self.validator = FilenameValidator()
-        self._exiftool_version_checked = False
 
     @property
     def name(self) -> str:
@@ -64,61 +63,11 @@ class PhotoNamingExifPlugin(FileProcessorPlugin):
         if path.suffix.lower() not in self.SUPPORTED_EXTENSIONS:
             return False
 
-        # Try to parse filename
-        parsed = self.parser.parse(path.name)
-        if not parsed:
-            return False
+        # Try to parse and validate filename
+        parsed = self._parse_and_validate(path.name)
+        return parsed is not None
 
-        # Validate parsed data
-        validation_errors = self.validator.validate(parsed)
-        return len(validation_errors) == 0
-
-    def _check_exiftool(self) -> bool:
-        """Check if ExifTool is installed and meets minimum version requirement.
-
-        Returns:
-            True if ExifTool is available and version >= 11.00, False otherwise.
-        """
-        if self._exiftool_version_checked:
-            return True
-
-        try:
-            with exiftool.ExifToolHelper() as et:
-                version_output = et.version
-                # Version is returned as float (e.g., 12.42)
-                if version_output >= 11.0:
-                    self.logger.info(f"ExifTool version {version_output} detected")
-                    self._exiftool_version_checked = True
-                    return True
-                else:
-                    self.logger.error(
-                        f"ExifTool version {version_output} is too old. "
-                        f"Minimum required version is 11.00"
-                    )
-                    return False
-        except Exception as e:
-            self.logger.error(f"ExifTool not found or not accessible: {e}")
-            self.logger.error(
-                "Please install ExifTool from https://exiftool.org/ and ensure it's in your PATH"
-            )
-            return False
-
-    def initialize(self, config: dict) -> bool:
-        """Initialize the plugin with configuration.
-
-        Args:
-            config: Plugin configuration dictionary.
-
-        Returns:
-            True if initialization successful, False otherwise.
-        """
-        if not self._check_exiftool():
-            return False
-
-        self.logger.info("PhotoNamingExifPlugin initialized successfully")
-        return True
-
-    def process(self, file_path: str, config: Dict[str, Any]) -> bool:
+    def process(self, file_path: str, config: dict[str, Any]) -> bool:
         """Process a file: parse filename, validate, write EXIF/XMP metadata, and move to processed folder.
 
         Args:
@@ -131,19 +80,10 @@ class PhotoNamingExifPlugin(FileProcessorPlugin):
         path = Path(file_path)
         self.logger.info(f"Processing file: {path}")
 
-        # Parse filename (can_handle already validated, but we parse again to get data)
-        parsed = self.parser.parse(path.name)
+        # Parse and validate filename
+        parsed = self._parse_and_validate(path.name)
         if not parsed:
-            self.logger.error(f"Failed to parse filename: {path.name}")
-            return False
-
-        # Validate parsed data (should not fail if can_handle passed, but double-check)
-        validation_errors = self.validator.validate(parsed)
-        if validation_errors:
-            self.logger.error(
-                f"Invalid filename format: {path.name}\n"
-                + "\n".join(f"  - {error}" for error in validation_errors)
-            )
+            self.logger.error(f"Failed to parse or validate filename: {path.name}")
             return False
 
         # Write EXIF/XMP metadata
@@ -157,6 +97,54 @@ class PhotoNamingExifPlugin(FileProcessorPlugin):
         self.logger.info(f"Successfully processed: {path.name}")
         return True
 
+    def _parse_and_validate(self, filename: str) -> Optional[ParsedFilename]:
+        """Parse and validate a filename.
+
+        Args:
+            filename: The filename to parse and validate.
+
+        Returns:
+            Parsed filename data if valid, None otherwise.
+        """
+        parsed = self.parser.parse(filename)
+        if not parsed:
+            return None
+
+        validation_errors = self.validator.validate(parsed)
+        if validation_errors:
+            return None
+
+        return parsed
+
+    def _build_metadata_dict(self, parsed: ParsedFilename) -> dict[str, str]:
+        """Build metadata dictionary from parsed filename.
+
+        Args:
+            parsed: Parsed filename data.
+
+        Returns:
+            Dictionary of metadata tags and values.
+        """
+        metadata = {"XMP:Identifier": str(uuid.uuid4())}
+
+        # Add EXIF:DateTimeOriginal for exact dates only
+        if parsed.modifier == "E":
+            metadata["EXIF:DateTimeOriginal"] = (
+                f"{parsed.year:04d}:{parsed.month:02d}:{parsed.day:02d} "
+                f"{parsed.hour:02d}:{parsed.minute:02d}:{parsed.second:02d}"
+            )
+
+        # Add XMP date fields
+        iptc_date = self._format_iptc_date(parsed)
+        if iptc_date:
+            metadata["XMP:Iptc4xmpCore:DateCreated"] = iptc_date
+
+        photoshop_datetime = self._format_photoshop_datetime(parsed)
+        if photoshop_datetime:
+            metadata["XMP:photoshop:DateCreated"] = photoshop_datetime
+
+        return metadata
+
     def _write_metadata(self, file_path: Path, parsed: ParsedFilename) -> bool:
         """Write metadata to EXIF/XMP fields.
 
@@ -169,29 +157,8 @@ class PhotoNamingExifPlugin(FileProcessorPlugin):
         """
         try:
             with exiftool.ExifToolHelper() as et:
-                # Generate UUID for identifier
-                file_uuid = str(uuid.uuid4())
-
-                # Prepare metadata dictionary
-                metadata = {
-                    "XMP:Identifier": file_uuid,
-                }
-
-                # Add dates based on modifier
-                if parsed.modifier.upper() == "E":
-                    # Exact date: write to EXIF:DateTimeOriginal
-                    exif_datetime = f"{parsed.year:04d}:{parsed.month:02d}:{parsed.day:02d} {parsed.hour:02d}:{parsed.minute:02d}:{parsed.second:02d}"
-                    metadata["EXIF:DateTimeOriginal"] = exif_datetime
-
-                # Write to XMP:Iptc4xmpCore:DateCreated (date only)
-                iptc_date = self._format_iptc_date(parsed)
-                if iptc_date:
-                    metadata["XMP:Iptc4xmpCore:DateCreated"] = iptc_date
-
-                # Write to XMP:photoshop:DateCreated (date + time in ISO 8601)
-                photoshop_datetime = self._format_photoshop_datetime(parsed)
-                if photoshop_datetime:
-                    metadata["XMP:photoshop:DateCreated"] = photoshop_datetime
+                # Build metadata dictionary
+                metadata = self._build_metadata_dict(parsed)
 
                 # Set metadata
                 et.set_tags(

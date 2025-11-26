@@ -1,7 +1,5 @@
 """Validator for parsed filename data."""
 
-from typing import List
-
 from .parser import ParsedFilename
 
 
@@ -14,7 +12,7 @@ class FilenameValidator:
         7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31
     }
 
-    def validate(self, parsed: ParsedFilename) -> List[str]:
+    def validate(self, parsed: ParsedFilename) -> list[str]:
         """Validate parsed filename data.
 
         Args:
@@ -42,7 +40,7 @@ class FilenameValidator:
 
         return errors
 
-    def _validate_date(self, parsed: ParsedFilename) -> List[str]:
+    def _validate_date(self, parsed: ParsedFilename) -> list[str]:
         """Validate date components.
 
         Args:
@@ -71,7 +69,7 @@ class FilenameValidator:
 
         return errors
 
-    def _validate_time(self, parsed: ParsedFilename) -> List[str]:
+    def _validate_time(self, parsed: ParsedFilename) -> list[str]:
         """Validate time components.
 
         Args:
@@ -93,7 +91,7 @@ class FilenameValidator:
 
         return errors
 
-    def _validate_zero_sequence(self, parsed: ParsedFilename) -> List[str]:
+    def _validate_zero_sequence(self, parsed: ParsedFilename) -> list[str]:
         """Validate that if a component is 00, all more precise components are also 00.
 
         Rule: If month=00, then day=00 and time=00:00:00
