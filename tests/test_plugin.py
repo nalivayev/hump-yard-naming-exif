@@ -52,6 +52,20 @@ class TestPhotoNamingExifPlugin:
         assert plugin.can_handle('1950.06.15.12.00.00.E.FAM.POR.000001.TIFF') is True
         assert plugin.can_handle('1950.06.15.12.00.00.E.FAM.POR.000001.JPG') is True
 
+    def test_can_handle_skips_processed_folder(self, plugin):
+        """Test can_handle skips files in 'processed' subfolder."""
+        assert plugin.can_handle('C:/watch/1950.06.15.12.00.00.E.FAM.POR.000001.tiff') is True
+        assert plugin.can_handle('C:/watch/processed/1950.06.15.12.00.00.E.FAM.POR.000001.tiff') is False
+        assert plugin.can_handle('C:/watch/subfolder/processed/1950.06.15.12.00.00.E.FAM.POR.000001.tiff') is False
+        assert plugin.can_handle('C:/watch/processed/subfolder/1950.06.15.12.00.00.E.FAM.POR.000001.jpg') is False
+
+    def test_can_handle_processes_similar_folder_names(self, plugin):
+        """Test can_handle processes files in folders with similar names to 'processed'."""
+        # These should be processed - only exact 'processed' folder name is skipped
+        assert plugin.can_handle('C:/watch/my_processed_files/1950.06.15.12.00.00.E.FAM.POR.000001.tiff') is True
+        assert plugin.can_handle('C:/watch/not_processed/1950.06.15.12.00.00.E.FAM.POR.000001.jpg') is True
+        assert plugin.can_handle('C:/watch/preprocessed/1950.06.15.12.00.00.E.FAM.POR.000001.tiff') is True
+
     def test_parse_and_validate_valid_file(self, plugin):
         """Test _parse_and_validate with valid filename."""
         result = plugin._parse_and_validate('1950.06.15.12.00.00.E.FAM.POR.000001.tiff')

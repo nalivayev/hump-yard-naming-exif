@@ -55,6 +55,10 @@ class PhotoNamingExifPlugin(FileProcessorPlugin):
         """
         path = Path(file_path)
 
+        # Skip files in 'processed' subfolder to avoid re-processing
+        if 'processed' in path.parts:
+            return False
+
         # Skip symlinks
         if path.is_symlink():
             return False
