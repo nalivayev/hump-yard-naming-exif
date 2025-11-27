@@ -201,25 +201,24 @@ class PhotoNamingExifPlugin(FileProcessorPlugin):
     def _format_photoshop_datetime(self, parsed: ParsedFilename) -> Optional[str]:
         """Format datetime for XMP:photoshop:DateCreated (ISO 8601 with time).
 
+        This field requires a complete date (modifier 'E'), unlike IPTC DateCreated
+        which accepts partial dates.
+
         Args:
             parsed: Parsed filename data.
 
         Returns:
-            Formatted datetime string or None if date is completely unknown.
+            Formatted datetime string or None if date is not complete (modifier != 'E').
         """
-        if parsed.year == 0:
+        # Only for exact dates (modifier 'E')
+        if parsed.modifier != "E":
             return None
 
-        # Build date part
-        if parsed.month == 0:
-            date_part = f"{parsed.year:04d}"
-        elif parsed.day == 0:
-            date_part = f"{parsed.year:04d}-{parsed.month:02d}"
-        else:
-            date_part = f"{parsed.year:04d}-{parsed.month:02d}-{parsed.day:02d}"
+        # Build full date
+        date_part = f"{parsed.year:04d}-{parsed.month:02d}-{parsed.day:02d}"
 
-        # Add time if day is known and time is not all zeros
-        if parsed.day != 0 and (parsed.hour != 0 or parsed.minute != 0 or parsed.second != 0):
+        # Add time if not all zeros
+        if parsed.hour != 0 or parsed.minute != 0 or parsed.second != 0:
             time_part = f"T{parsed.hour:02d}:{parsed.minute:02d}:{parsed.second:02d}"
             return date_part + time_part
 
