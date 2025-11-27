@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Changed EXIF tag from `Exif.Photo.DateTimeOriginal` to `Exif.Image.DateTimeOriginal`
+- Fixed `Xmp.Iptc4xmpCore.DateCreated` to contain only date (removed time component) - follows IPTC standard
+- Fixed `Xmp.photoshop.DateCreated` to always include time for exact dates (modifier E), even when time is 00:00:00
+- Added duplication of UUID identifier to `Xmp.xmp.Identifier` (in addition to existing `Xmp.dc.identifier`)
+
+### Removed
+- Removed writing of `Iptc.Application2.DateCreated` tag (incorrect usage)
+
 ## [0.1.0] - 2025-11-26
 
 ### Added

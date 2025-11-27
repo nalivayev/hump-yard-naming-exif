@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional
 
-import exiftool
+import pyexiv2
 
 from hump_yard.base_plugin import FileProcessorPlugin
 
@@ -120,37 +120,45 @@ class PhotoNamingExifPlugin(FileProcessorPlugin):
 
         return parsed
 
-    def _build_metadata_dict(self, parsed: ParsedFilename) -> dict[str, str]:
-        """Build metadata dictionary from parsed filename.
+    def _build_metadata_dict(self, parsed: ParsedFilename) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
+        """Build metadata dictionaries from parsed filename for pyexiv2.
 
         Args:
             parsed: Parsed filename data.
 
         Returns:
-            Dictionary of metadata tags and values.
+            Tuple of (exif_dict, iptc_dict, xmp_dict) for pyexiv2.
         """
-        metadata = {"XMP:Identifier": str(uuid.uuid4())}
+        exif_dict = {}
+        iptc_dict = {}
+        xmp_dict = {}
+
+        # XMP: Always add identifier (duplicate in both dc and xmp namespaces)
+        identifier = str(uuid.uuid4())
+        xmp_dict["Xmp.dc.identifier"] = identifier
+        xmp_dict["Xmp.xmp.Identifier"] = identifier
 
         # Add EXIF:DateTimeOriginal for exact dates only
         if parsed.modifier == "E":
-            metadata["EXIF:DateTimeOriginal"] = (
+            exif_dict["Exif.Image.DateTimeOriginal"] = (
                 f"{parsed.year:04d}:{parsed.month:02d}:{parsed.day:02d} "
                 f"{parsed.hour:02d}:{parsed.minute:02d}:{parsed.second:02d}"
             )
+            
+            # XMP-photoshop:DateCreated also requires full exact date (modifier 'E')
+            photoshop_datetime = self._format_photoshop_datetime(parsed)
+            if photoshop_datetime:
+                xmp_dict["Xmp.photoshop.DateCreated"] = photoshop_datetime
+        
+        # XMP-Iptc4xmpCore:DateCreated - supports partial dates (year, year-month, full date)
+        xmp_iptc_date = self._format_iptc_date(parsed)
+        if xmp_iptc_date:
+            xmp_dict["Xmp.Iptc4xmpCore.DateCreated"] = xmp_iptc_date
 
-        # Add XMP date fields
-        iptc_date = self._format_iptc_date(parsed)
-        if iptc_date:
-            metadata["XMP:Iptc4xmpCore:DateCreated"] = iptc_date
-
-        photoshop_datetime = self._format_photoshop_datetime(parsed)
-        if photoshop_datetime:
-            metadata["XMP:photoshop:DateCreated"] = photoshop_datetime
-
-        return metadata
+        return exif_dict, iptc_dict, xmp_dict
 
     def _write_metadata(self, file_path: Path, parsed: ParsedFilename) -> bool:
-        """Write metadata to EXIF/XMP fields.
+        """Write metadata to EXIF/XMP fields using pyexiv2.
 
         Args:
             file_path: Path to the file.
@@ -160,30 +168,34 @@ class PhotoNamingExifPlugin(FileProcessorPlugin):
             True if all metadata written successfully, False otherwise.
         """
         try:
-            with exiftool.ExifToolHelper() as et:
-                # Build metadata dictionary
-                metadata = self._build_metadata_dict(parsed)
+            # Build metadata dictionaries
+            exif_dict, iptc_dict, xmp_dict = self._build_metadata_dict(parsed)
 
-                # Set metadata
-                et.set_tags(
-                    str(file_path),
-                    tags=metadata,
-                    params=["-P", "-overwrite_original"]
-                )
+            # Write metadata using pyexiv2
+            with pyexiv2.Image(str(file_path)) as img:
+                if exif_dict:
+                    img.modify_exif(exif_dict)
+                    self.logger.info(f"  EXIF metadata written to {file_path.name}:")
+                    for key, value in exif_dict.items():
+                        self.logger.info(f"    - {key}: {value}")
+                
+                if xmp_dict:
+                    img.modify_xmp(xmp_dict)
+                    self.logger.info(f"  XMP metadata written to {file_path.name}:")
+                    for key, value in xmp_dict.items():
+                        self.logger.info(f"    - {key}: {value}")
 
-                # Log detailed information
-                self.logger.info(f"  Metadata written to {file_path.name}:")
-                for key, value in metadata.items():
-                    self.logger.info(f"    - {key}: {value}")
-
-                return True
+            return True
 
         except Exception as e:
             self.logger.error(f"Failed to write metadata to {file_path}: {e}")
             return False
 
     def _format_iptc_date(self, parsed: ParsedFilename) -> Optional[str]:
-        """Format date for XMP:Iptc4xmpCore:DateCreated (date only, no time).
+        """Format date for XMP:Iptc4xmpCore:DateCreated.
+
+        Supports partial dates (year only, year-month, or full date).
+        This field should contain ONLY date, never time.
 
         Args:
             parsed: Parsed filename data.
@@ -200,13 +212,14 @@ class PhotoNamingExifPlugin(FileProcessorPlugin):
         if parsed.day == 0:
             return f"{parsed.year:04d}-{parsed.month:02d}"
 
+        # Full date (date only, no time)
         return f"{parsed.year:04d}-{parsed.month:02d}-{parsed.day:02d}"
 
     def _format_photoshop_datetime(self, parsed: ParsedFilename) -> Optional[str]:
         """Format datetime for XMP:photoshop:DateCreated (ISO 8601 with time).
 
-        This field requires a complete date (modifier 'E'), unlike IPTC DateCreated
-        which accepts partial dates.
+        This field requires a complete date with time (modifier 'E'), unlike XMP:Iptc4xmpCore:DateCreated
+        which accepts partial dates. For exact dates (E), always includes time component.
 
         Args:
             parsed: Parsed filename data.
@@ -218,15 +231,8 @@ class PhotoNamingExifPlugin(FileProcessorPlugin):
         if parsed.modifier != "E":
             return None
 
-        # Build full date
-        date_part = f"{parsed.year:04d}-{parsed.month:02d}-{parsed.day:02d}"
-
-        # Add time if not all zeros
-        if parsed.hour != 0 or parsed.minute != 0 or parsed.second != 0:
-            time_part = f"T{parsed.hour:02d}:{parsed.minute:02d}:{parsed.second:02d}"
-            return date_part + time_part
-
-        return date_part
+        # Build full datetime (always with time for exact dates)
+        return f"{parsed.year:04d}-{parsed.month:02d}-{parsed.day:02d}T{parsed.hour:02d}:{parsed.minute:02d}:{parsed.second:02d}"
 
     def _move_to_processed(self, file_path: Path) -> bool:
         """Move file to processed subfolder, preserving directory structure.

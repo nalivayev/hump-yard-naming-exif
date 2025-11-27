@@ -25,7 +25,7 @@ classifiers = [
 ]
 dependencies = [
     "hump-yard>=0.3.0",
-    "PyExifTool>=0.5.0",
+    "pyexiv2>=2.0.0",
 ]
 
 [project.optional-dependencies]

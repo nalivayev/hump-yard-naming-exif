@@ -51,12 +51,13 @@ The plugin writes the following EXIF/XMP fields:
 - `EXIF:DateTimeOriginal` - Full date and time in format `YYYY:MM:DD HH:MM:SS`
 - `XMP:Iptc4xmpCore:DateCreated` - Date only in format `YYYY-MM-DD` (or partial: `YYYY-MM`, `YYYY`)
 - `XMP:photoshop:DateCreated` - Full datetime in ISO 8601 format: `YYYY-MM-DDTHH:MM:SS`
-- `XMP:Identifier` - Random UUID4
+- `XMP-dc:Identifier` - Random UUID4
+- `XMP-xmp:Identifier` - Same UUID4 (duplicated)
 
 ### For Non-Exact Dates (Modifiers `A`, `B`, `C`, `F`)
-- `XMP:Iptc4xmpCore:DateCreated` - Partial or full date (no time)
-- `XMP:photoshop:DateCreated` - Date and optional time in ISO 8601 format
-- `XMP:Identifier` - Random UUID4
+- `XMP:Iptc4xmpCore:DateCreated` - Partial or full date (supports year only, year-month, or full date)
+- `XMP-dc:Identifier` - Random UUID4
+- `XMP-xmp:Identifier` - Same UUID4 (duplicated)
 
 **Note:** `EXIF:DateTimeOriginal` is only written for exact dates (modifier `E`).
 
@@ -64,12 +65,11 @@ The plugin writes the following EXIF/XMP fields:
 
 ### Prerequisites
 
-1. **ExifTool** (version 11.00 or higher) must be installed on your system:
-   - **Windows:** Download from [https://exiftool.org/](https://exiftool.org/) and add to PATH
-   - **macOS:** `brew install exiftool`
-   - **Linux:** `apt install libimage-exiftool-perl` or `yum install perl-Image-ExifTool`
+1. **Hump Yard** (version 0.3.0 or higher)
 
-2. **Hump Yard** (version 0.3.0 or higher)
+2. **pyexiv2** library will be installed automatically as a dependency
+   - On Windows, the required exiv2 DLL is bundled with pyexiv2
+   - On Linux/macOS, you may need to install exiv2: `apt install libexiv2-dev` or `brew install exiv2`
 
 ### Installing the Plugin
 

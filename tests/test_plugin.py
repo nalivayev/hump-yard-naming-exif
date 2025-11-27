@@ -85,44 +85,44 @@ class TestPhotoNamingExifPlugin:
     def test_build_metadata_dict_exact_date(self, plugin, parser):
         """Test _build_metadata_dict for exact date."""
         parsed = parser.parse('1950.06.15.12.30.00.E.FAM.POR.000001.tiff')
-        metadata = plugin._build_metadata_dict(parsed)
+        exif_dict, iptc_dict, xmp_dict = plugin._build_metadata_dict(parsed)
         
-        assert 'XMP:Identifier' in metadata
-        assert 'EXIF:DateTimeOriginal' in metadata
-        assert 'XMP:Iptc4xmpCore:DateCreated' in metadata
-        assert 'XMP:photoshop:DateCreated' in metadata
-        assert metadata['EXIF:DateTimeOriginal'] == '1950:06:15 12:30:00'
-        assert metadata['XMP:Iptc4xmpCore:DateCreated'] == '1950-06-15'
-        assert metadata['XMP:photoshop:DateCreated'] == '1950-06-15T12:30:00'  # Only for exact dates
+        assert 'Xmp.dc.identifier' in xmp_dict
+        assert 'Exif.Image.DateTimeOriginal' in exif_dict
+        assert 'Xmp.Iptc4xmpCore.DateCreated' in xmp_dict
+        assert 'Xmp.photoshop.DateCreated' in xmp_dict
+        assert exif_dict['Exif.Image.DateTimeOriginal'] == '1950:06:15 12:30:00'
+        assert xmp_dict['Xmp.Iptc4xmpCore.DateCreated'] == '1950-06-15'
+        assert xmp_dict['Xmp.photoshop.DateCreated'] == '1950-06-15T12:30:00'  # Only for exact dates
 
     def test_build_metadata_dict_circa_date(self, plugin, parser):
         """Test _build_metadata_dict for circa date."""
         parsed = parser.parse('1950.06.00.00.00.00.C.FAM.POR.000002.jpg')
-        metadata = plugin._build_metadata_dict(parsed)
+        exif_dict, iptc_dict, xmp_dict = plugin._build_metadata_dict(parsed)
         
-        assert 'XMP:Identifier' in metadata
-        assert 'EXIF:DateTimeOriginal' not in metadata  # No EXIF for non-exact dates
-        assert 'XMP:Iptc4xmpCore:DateCreated' in metadata
-        assert 'XMP:photoshop:DateCreated' not in metadata  # No photoshop date for non-exact dates
-        assert metadata['XMP:Iptc4xmpCore:DateCreated'] == '1950-06'
+        assert 'Xmp.dc.identifier' in xmp_dict
+        assert 'Exif.Image.DateTimeOriginal' not in exif_dict  # No EXIF for non-exact dates
+        assert 'Xmp.Iptc4xmpCore.DateCreated' in xmp_dict
+        assert 'Xmp.photoshop.DateCreated' not in xmp_dict  # No photoshop date for non-exact dates
+        assert xmp_dict['Xmp.Iptc4xmpCore.DateCreated'] == '1950-06'
 
     def test_build_metadata_dict_year_only(self, plugin, parser):
         """Test _build_metadata_dict for year only."""
         parsed = parser.parse('1950.00.00.00.00.00.C.TRV.LND.000003.tiff')
-        metadata = plugin._build_metadata_dict(parsed)
+        exif_dict, iptc_dict, xmp_dict = plugin._build_metadata_dict(parsed)
         
-        assert 'XMP:Iptc4xmpCore:DateCreated' in metadata
-        assert metadata['XMP:Iptc4xmpCore:DateCreated'] == '1950'
+        assert 'Xmp.Iptc4xmpCore.DateCreated' in xmp_dict
+        assert xmp_dict['Xmp.Iptc4xmpCore.DateCreated'] == '1950'
 
     def test_build_metadata_dict_absent_date(self, plugin, parser):
         """Test _build_metadata_dict for absent date."""
         parsed = parser.parse('0000.00.00.00.00.00.A.UNK.000.000001.jpg')
-        metadata = plugin._build_metadata_dict(parsed)
+        exif_dict, iptc_dict, xmp_dict = plugin._build_metadata_dict(parsed)
         
-        assert 'XMP:Identifier' in metadata
+        assert 'Xmp.dc.identifier' in xmp_dict
         # No date fields when year is 0
-        assert 'XMP:Iptc4xmpCore:DateCreated' not in metadata
-        assert 'XMP:photoshop:DateCreated' not in metadata
+        assert 'Xmp.Iptc4xmpCore.DateCreated' not in xmp_dict
+        assert 'Xmp.photoshop.DateCreated' not in xmp_dict
 
     def test_format_iptc_date_full(self, plugin, parser):
         """Test _format_iptc_date with full date."""
@@ -155,10 +155,10 @@ class TestPhotoNamingExifPlugin:
         assert result == '1950-06-15T12:30:45'
 
     def test_format_photoshop_datetime_exact_no_time(self, plugin, parser):
-        """Test _format_photoshop_datetime with exact date but no time."""
+        """Test _format_photoshop_datetime with exact date but no time (00:00:00)."""
         parsed = parser.parse('1950.06.15.00.00.00.E.FAM.POR.000001.tiff')
         result = plugin._format_photoshop_datetime(parsed)
-        assert result == '1950-06-15'
+        assert result == '1950-06-15T00:00:00'  # Time is always included for exact dates
 
     def test_format_photoshop_datetime_circa(self, plugin, parser):
         """Test _format_photoshop_datetime with circa date (should return None)."""
